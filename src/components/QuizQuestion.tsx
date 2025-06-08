@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 
 interface Answer {
@@ -13,6 +14,9 @@ interface Question {
   id: string;
   text: string;
   answers: Answer[];
+  multipleChoice?: boolean;
+  correctCount?: number;
+  explanation?: string;
 }
 
 interface QuizQuestionProps {
@@ -28,24 +32,48 @@ const QuizQuestion = ({
   totalQuestions,
   onAnswer,
 }: QuizQuestionProps) => {
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [selectedAnswers, setSelectedAnswers] = useState<string[]>([]);
   const [showResult, setShowResult] = useState(false);
 
   const handleAnswerClick = (answerId: string) => {
-    if (selectedAnswer) return;
+    if (showResult) return;
 
-    setSelectedAnswer(answerId);
+    if (question.multipleChoice) {
+      const newSelected = selectedAnswers.includes(answerId)
+        ? selectedAnswers.filter((id) => id !== answerId)
+        : [...selectedAnswers, answerId];
+      setSelectedAnswers(newSelected);
+    } else {
+      if (selectedAnswers.length > 0) return;
+      setSelectedAnswers([answerId]);
+      setShowResult(true);
+
+      const answer = question.answers.find((a) => a.id === answerId);
+      setTimeout(() => {
+        onAnswer(answer?.isCorrect || false);
+      }, 2000);
+    }
+  };
+
+  const handleSubmitMultiple = () => {
+    if (!question.multipleChoice || selectedAnswers.length === 0) return;
+
     setShowResult(true);
+    const correctAnswers = question.answers
+      .filter((a) => a.isCorrect)
+      .map((a) => a.id);
+    const isCorrect =
+      selectedAnswers.length === correctAnswers.length &&
+      selectedAnswers.every((id) => correctAnswers.includes(id));
 
-    const answer = question.answers.find((a) => a.id === answerId);
     setTimeout(() => {
-      onAnswer(answer?.isCorrect || false);
-    }, 1500);
+      onAnswer(isCorrect);
+    }, 2000);
   };
 
   const getAnswerStyle = (answer: Answer) => {
     if (!showResult) {
-      return selectedAnswer === answer.id
+      return selectedAnswers.includes(answer.id)
         ? "bg-quiz-selected text-white border-quiz-selected"
         : "bg-white hover:bg-quiz-hover border-gray-200 hover:border-primary transition-all duration-200";
     }
@@ -54,7 +82,7 @@ const QuizQuestion = ({
       return "bg-quiz-correct text-white border-quiz-correct";
     }
 
-    if (selectedAnswer === answer.id && !answer.isCorrect) {
+    if (selectedAnswers.includes(answer.id) && !answer.isCorrect) {
       return "bg-quiz-incorrect text-white border-quiz-incorrect";
     }
 
@@ -79,23 +107,49 @@ const QuizQuestion = ({
           <CardTitle className="text-xl md:text-2xl font-montserrat font-semibold leading-relaxed">
             {question.text}
           </CardTitle>
+
+          {question.multipleChoice && (
+            <Badge variant="secondary" className="w-fit">
+              Выберите {question.correctCount} варианта
+            </Badge>
+          )}
         </CardHeader>
 
-        <CardContent className="space-y-3">
-          {question.answers.map((answer) => (
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            {question.answers.map((answer) => (
+              <Button
+                key={answer.id}
+                variant="outline"
+                className={`w-full p-4 h-auto text-left justify-start font-open-sans text-base border-2 ${getAnswerStyle(answer)}`}
+                onClick={() => handleAnswerClick(answer.id)}
+                disabled={showResult}
+              >
+                <span className="w-6 h-6 rounded-full border-2 border-current flex items-center justify-center mr-3 flex-shrink-0">
+                  {String.fromCharCode(65 + question.answers.indexOf(answer))}
+                </span>
+                {answer.text}
+              </Button>
+            ))}
+          </div>
+
+          {question.multipleChoice && !showResult && (
             <Button
-              key={answer.id}
-              variant="outline"
-              className={`w-full p-4 h-auto text-left justify-start font-open-sans text-base border-2 ${getAnswerStyle(answer)}`}
-              onClick={() => handleAnswerClick(answer.id)}
-              disabled={selectedAnswer !== null}
+              onClick={handleSubmitMultiple}
+              className="w-full"
+              disabled={selectedAnswers.length !== (question.correctCount || 1)}
             >
-              <span className="w-6 h-6 rounded-full border-2 border-current flex items-center justify-center mr-3 flex-shrink-0">
-                {String.fromCharCode(65 + question.answers.indexOf(answer))}
-              </span>
-              {answer.text}
+              Ответить ({selectedAnswers.length}/{question.correctCount})
             </Button>
-          ))}
+          )}
+
+          {showResult && question.explanation && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800 font-medium">
+                💡 {question.explanation}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
